@@ -15,9 +15,9 @@ PRL 2019).
 EQUATIONS
 ──────────────────────────────────────────────────────────────────────────
 Phase field         ∂φ/∂t = M ∇²μ  −  v · ∇φ
-Chemical potential  μ = f′(φ) − ε² ∇²φ ,   f(φ) = ¼(φ²−1)²
+Chemical potential  μ = f′(φ) − ε² ∇²φ ,    f(φ) = ¼(φ²−1)²
 Darcy velocity      v = −K(φ) ∇p ,          K(φ) = 1/η(φ)
-Pressure            ∇·[K(φ) ∇p] = S(φ) ,   S = k_grow (1+φ)/2
+Pressure            ∇·[K(φ) ∇p] = -S(φ) ,   S = k_grow (1+φ)/2
 
 η(φ) interpolates linearly:  η = 1 at φ = +1 (active),
                               η = r_vis at φ = −1 (passive).
@@ -85,7 +85,7 @@ noise_amp    = 0.1                  # amplitude of random interface perturbation
 aspect_ratio = 1                    # initial aspect ratio of droplet
 
 # ── Numerical ─────────────────────────────────────────────────────────────
-dt         = 0.05                   # time step
+dt         = 0.01                   # time step
 n_steps    = 35000                  # total simulation steps  (total time = n_steps × dt)
 plot_every = int(n_steps / (4*2-1)) # steps between saved frames, 4 columns and 2 rows
 n_p_iter   = 15                     # Picard iterations for the pressure solve (increase to ~25 for r_vis > 8)
@@ -207,7 +207,7 @@ def time_step(phi):
     Algorithm
     ---------
     1.  K(φ)  via permeability()
-    2.  Pressure:  ∇·[K ∇p] = S(φ)    (iterative spectral solve)
+    2.  Pressure:  ∇·[K ∇p] = -S(φ)    (iterative spectral solve)
     3.  Darcy velocity:  v = −K ∇p
     4.  Advection:  v·∇φ               (explicit)
     5.  Cahn–Hilliard step             (stabilised semi-implicit)
@@ -234,8 +234,7 @@ def time_step(phi):
     vx, vy     = -K * px, -K * py
 
     # ── 4.  Advection ─────────────────────────────────────────────────────
-    phix, phiy = gradient(phi_hat)
-    adv_hat    = fft2(vx * phix + vy * phiy)
+    adv_hat = fft2(divergence(phi * vx, phi * vy))
 
     # ── 5.  Cahn–Hilliard (stabilised semi-implicit) ─────────────────────
     #
@@ -255,7 +254,7 @@ def time_step(phi):
 
     phi_new    = ifft2r(phi_hat_new)
     phi_new    = np.clip(phi_new, -1.0, 1.0)        # keep in physical range
-    return phi_new, vx, vy
+    return phi_new
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -373,7 +372,7 @@ def run_simulation(r_vis_value=None, k_grow_value=None, aspect_ratio_value=None,
         print(f"  {'':─>6}  {'':─>8}  {'':─>7}  {'':─>8}")
 
     for n in range(1, n_steps + 1):
-        phi, vx, vy = time_step(phi)
+        phi = time_step(phi)
 
         if n % plot_every == 0:
             t   = n * dt
