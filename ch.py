@@ -134,7 +134,7 @@ def divergence(fx, fy):
 # PHYSICS
 # ══════════════════════════════════════════════════════════════════════════
 
-def permeability(phi):
+def permeability(phi, r_vis=1):
     """
     K(φ) = 1 / η(φ),  with linear viscosity interpolation:
 
@@ -149,7 +149,7 @@ def permeability(phi):
     return 1.0 / eta
 
 
-def growth_source(phi):
+def growth_source(phi, k_grow=0):
     """
     S(φ) = k_grow · (1 + φ) / 2
 
@@ -159,7 +159,7 @@ def growth_source(phi):
     return k_grow * (1.0 + phi) / 2.0
 
 
-def solve_pressure(phi, K):
+def solve_pressure(phi, K, k_grow=0):
     """
     Solve  ∇·[K(φ) ∇p] = −S(φ)   [note the minus sign]
 
@@ -175,7 +175,7 @@ def solve_pressure(phi, K):
     which in Fourier space is:
         p̂^(n+1) = (Ŝ + corr_hat) / (K̄ |k|²)
     """
-    S     = growth_source(phi)
+    S     = growth_source(phi, k_grow)
     K_bar = float(np.mean(K))
     dK    = K - K_bar
 
@@ -200,7 +200,7 @@ def solve_pressure(phi, K):
 # TIME STEP
 # ══════════════════════════════════════════════════════════════════════════
 
-def time_step(phi):
+def time_step(phi, r_vis=1, k_grow=0):
     """
     Advance φ by one time step dt.
 
@@ -224,10 +224,10 @@ def time_step(phi):
     vx, vy  : ndarray   Darcy velocity components (for diagnostics / plotting)
     """
     phi_hat    = fft2(phi)
-    K          = permeability(phi)
+    K          = permeability(phi, r_vis)
 
     # ── 1 & 2.  Pressure ──────────────────────────────────────────────────
-    p_hat      = solve_pressure(phi, K)
+    p_hat      = solve_pressure(phi, K, k_grow)
 
     # ── 3.  Darcy velocity ────────────────────────────────────────────────
     px, py     = gradient(p_hat)
@@ -360,7 +360,7 @@ def run_simulation(r_vis_value=None, k_grow_value=None, aspect_ratio_value=None,
         n_steps = n_steps_value
         plot_every = int(n_steps / (4*2-1))
 
-    phi    = make_initial_phi()
+    phi    = make_initial_phi(aspect=aspect_ratio)
     frames = [(phi.copy(), 0.0)]
     diag   = {'t': [0.0], 'R': [measure_radius(phi)], 'n_fingers': [0]}
 
@@ -372,7 +372,7 @@ def run_simulation(r_vis_value=None, k_grow_value=None, aspect_ratio_value=None,
         print(f"  {'':─>6}  {'':─>8}  {'':─>7}  {'':─>8}")
 
     for n in range(1, n_steps + 1):
-        phi = time_step(phi)
+        phi = time_step(phi, r_vis, k_grow)
 
         if n % plot_every == 0:
             t   = n * dt
@@ -519,7 +519,6 @@ def compare_activity(r_vis_list=(1.0, 2.0, 4.0, 8.0),
     -------
     >>> compare_activity([1.0, 2.0, 4.0, 8.0])
     """
-    global r_vis
     fig, axes = plt.subplots(1, len(r_vis_list),
                              figsize=(4 * len(r_vis_list), 4.5))
     axes = list(np.array(axes).flatten())
