@@ -31,7 +31,7 @@ NUMERICS
 •  Picard iteration for the variable-permeability Poisson equation
 
 ──────────────────────────────────────────────────────────────────────────
-SUGGESTED STUDENT WORKFLOW
+SUGGESTED WORKFLOW
 ──────────────────────────────────────────────────────────────────────────
   Step 1  Pure CH (no velocity): run with k_grow = 0, r_vis = 1.
           Verify a perturbed ellipse relaxes back to a circle.
@@ -80,7 +80,7 @@ r_vis      = 4.0                    # viscosity ratio η_passive / η_active   �
                                     #   r_vis > 1  →  fingering (more fingers at higher r_vis)
 
 # ── Initial droplet ───────────────────────────────────────────────────────
-R0           = 30.0                 # initial radius
+R0           = 80.0                 # initial radius
 noise_amp    = 0.1                  # amplitude of random interface perturbations
 aspect_ratio = 1                    # initial aspect ratio of droplet
 
@@ -277,6 +277,35 @@ def make_initial_phi(seed=42, aspect=aspect_ratio):   # aspect > 1 → ellipse
     return np.clip(phi, -1.0, 1.0)
 
 
+def make_initial_phi_multi(n_droplets=2, seed=42, aspect=aspect_ratio):
+    """
+    Initialize phi with multiple elliptical droplets plus interface-localized noise.
+    Each droplet has a random position (and optional size variations).
+    """
+    rng = np.random.default_rng(seed)
+    phi = np.zeros((N, N), dtype=float)
+    R0_multi = R0 / n_droplets
+
+    for _ in range(n_droplets):
+        # random center (keep away from boundaries a bit)
+        cx = rng.uniform(0.2 * L, 0.8 * L)
+        cy = rng.uniform(0.2 * L, 0.8 * L)
+        # optional small radius variation
+        R = R0_multi * rng.uniform(0.8, 1.2)
+        # elliptical distance
+        r = np.sqrt(((X - cx) / aspect)**2 + ((Y - cy) * aspect)**2)
+        # smooth droplet
+        phi_drop = np.tanh((R - r) / (np.sqrt(2) * eps))
+        phi += phi_drop
+
+    # normalize so field stays in [-1, 1] range roughly consistent
+    phi = np.clip(phi, -1.0, 1.0)
+    # add interface-localized noise (after summing droplets)
+    mask = np.exp(-10.0 * phi**2)
+    phi += noise_amp * rng.standard_normal((N, N)) * mask
+    return np.clip(phi, -1.0, 1.0)
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # DIAGNOSTICS
 # ══════════════════════════════════════════════════════════════════════════
@@ -360,7 +389,7 @@ def run_simulation(r_vis_value=None, k_grow_value=None, aspect_ratio_value=None,
         n_steps = n_steps_value
         plot_every = int(n_steps / (4*2-1))
 
-    phi    = make_initial_phi(aspect=aspect_ratio)
+    phi    = make_initial_phi_multi(aspect=aspect_ratio)
     frames = [(phi.copy(), 0.0)]
     diag   = {'t': [0.0], 'R': [measure_radius(phi)], 'n_fingers': [0]}
 
